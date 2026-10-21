@@ -1,0 +1,56 @@
+# KicksHub Docker Compose Example (For Future Production/Containerized Phases)
+# Note: Docker is NOT required for local Phase 1 development.
+# Use this as a reference configuration for containerized deployment in subsequent phases.
+
+services:
+  db:
+    image: mysql:8.4
+    container_name: kickshub-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password
+      MYSQL_DATABASE: kickshub
+      MYSQL_USER: kickshub_user
+      MYSQL_PASSWORD: kickshub_pass123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "kickshub_user", "-pkickshub_pass123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kickshub-backend
+    restart: unless-stopped
+    environment:
+      FLASK_ENV: production
+      SECRET_KEY: replace-with-a-random-secret
+      DATABASE_URL: mysql+pymysql://kickshub_user:kickshub_pass123@db:3306/kickshub
+      FRONTEND_ORIGIN: http://localhost:5173
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kickshub-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:5000/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
