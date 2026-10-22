@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: kickshub-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt && flask db upgrade
+    startCommand: gunicorn run:app
+    rootDir: backend
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: JWT_COOKIE_SAMESITE
+        value: None
+      - key: JWT_COOKIE_SECURE
+        value: "True"

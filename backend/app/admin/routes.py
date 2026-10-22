@@ -717,7 +717,7 @@ def get_admin_order_detail(order_id):
                 "provider": order.payment.provider if order.payment else "simulated",
                 "status": order.payment.status if order.payment else "pending",
                 "amount": str(order.payment.amount) if order.payment else str(order.total),
-                "transaction_id": order.payment.transaction_id if order.payment else None,
+                "transaction_id": order.payment.transaction_ref if order.payment else None,
             } if order.payment else None,
             "items": items,
         }

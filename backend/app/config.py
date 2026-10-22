@@ -25,8 +25,8 @@ class Config:
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
     JWT_HEADER_NAME = "Authorization"
     JWT_HEADER_TYPE = "Bearer"
-    JWT_COOKIE_SECURE = False
-    JWT_COOKIE_SAMESITE = "Lax"
+    JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "False").lower() in ("true", "1")
+    JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
     JWT_REFRESH_COOKIE_NAME = "kickshub_refresh_token"
     JWT_REFRESH_COOKIE_PATH = "/api/v1/auth"
     JWT_COOKIE_CSRF_PROTECT = True
@@ -70,8 +70,14 @@ class ProductionConfig(Config):
     """Production environment configuration."""
 
     DEBUG = False
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
-    JWT_COOKIE_SECURE = True
+    _raw_db_url = os.getenv("DATABASE_URL", "")
+    SQLALCHEMY_DATABASE_URI = (
+        _raw_db_url.replace("mysql://", "mysql+pymysql://", 1)
+        if _raw_db_url.startswith("mysql://")
+        else _raw_db_url
+    )
+    JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "True").lower() in ("true", "1")
+    JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "None")
 
     @classmethod
     def validate(cls):

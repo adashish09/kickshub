@@ -21,13 +21,16 @@ def create_app(config_name=None):
     migrate.init_app(flask_app, db)
     jwt.init_app(flask_app)
 
-    # Configure CORS strictly for the local React development origin
-    frontend_origin = flask_app.config.get("FRONTEND_ORIGIN", "http://localhost:5173")
-    origins = [frontend_origin]
-    if "localhost" in frontend_origin:
-        origins.append(frontend_origin.replace("localhost", "127.0.0.1"))
-    elif "127.0.0.1" in frontend_origin:
-        origins.append(frontend_origin.replace("127.0.0.1", "localhost"))
+    # Configure CORS for configured origins (supports comma-separated list for production & preview domains)
+    frontend_origins_raw = flask_app.config.get("FRONTEND_ORIGIN", "http://localhost:5173")
+    origins = [orig.strip() for orig in frontend_origins_raw.split(",") if orig.strip()]
+    extra_origins = []
+    for orig in origins:
+        if "localhost" in orig:
+            extra_origins.append(orig.replace("localhost", "127.0.0.1"))
+        elif "127.0.0.1" in orig:
+            extra_origins.append(orig.replace("127.0.0.1", "localhost"))
+    origins.extend(extra_origins)
 
     cors.init_app(
         flask_app,
