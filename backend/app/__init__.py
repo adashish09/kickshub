@@ -144,3 +144,11 @@ def create_app(config_name=None):
 
     return flask_app
 
+
+def __getattr__(name):
+    """Support WSGI servers configured with 'gunicorn app:app' (PEP 562)."""
+    if name == "app":
+        return create_app()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
