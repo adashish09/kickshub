@@ -6,22 +6,41 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+INSECURE_SECRET_DEFAULT = "dev-insecure-secret-key-change-in-production"
+
+
 def normalize_database_url(url: str | None) -> str:
-    """Normalize database connection string for SQLAlchemy with PyMySQL."""
+    """Normalize database connection string for SQLAlchemy with PyMySQL and ensure SSL for cloud hosts."""
     if not url:
         return ""
     url = url.strip()
     if url.startswith("mysql://"):
-        return url.replace("mysql://", "mysql+pymysql://", 1)
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql://", 1)
+        url = url.replace("mysql://", "mysql+pymysql://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    # For cloud-hosted MySQL (TiDB Cloud, Aiven, AWS RDS, Azure MySQL, etc.), enforce secure TLS/SSL transport
+    is_cloud_mysql = any(
+        host in url.lower()
+        for host in ["tidb", "aiven", "amazonaws.com", "database.azure.com", "clever-cloud.com"]
+    )
+    if is_cloud_mysql:
+        ca_bundle = "/etc/ssl/certs/ca-certificates.crt"
+        has_ca = os.path.exists(ca_bundle)
+        if "ssl_ca" not in url.lower() and has_ca:
+            sep = "&" if "?" in url else "?"
+            url += f"{sep}ssl_ca={ca_bundle}"
+        if "ssl_verify_cert" not in url.lower():
+            sep = "&" if "?" in url else "?"
+            url += f"{sep}ssl_verify_cert=true&ssl_verify_identity=true"
+
     return url
 
 
 class Config:
     """Base application configuration."""
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-key-change-in-production")
+    SECRET_KEY = os.getenv("SECRET_KEY", INSECURE_SECRET_DEFAULT)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
@@ -92,9 +111,11 @@ class ProductionConfig(Config):
     def validate(cls):
         if not cls.SQLALCHEMY_DATABASE_URI:
             raise ValueError("DATABASE_URL environment variable must be set in production.")
-        if not os.getenv("SECRET_KEY") or os.getenv("SECRET_KEY") == Config.SECRET_KEY:
+        secret = os.getenv("SECRET_KEY", "").strip()
+        if not secret or secret == INSECURE_SECRET_DEFAULT:
             raise ValueError("A secure SECRET_KEY must be provided in production.")
-        if not os.getenv("JWT_SECRET_KEY") or os.getenv("JWT_SECRET_KEY") == Config.JWT_SECRET_KEY:
+        jwt_secret = os.getenv("JWT_SECRET_KEY", "").strip()
+        if not jwt_secret or jwt_secret == INSECURE_SECRET_DEFAULT:
             raise ValueError("A secure JWT_SECRET_KEY must be provided in production.")
 
 
