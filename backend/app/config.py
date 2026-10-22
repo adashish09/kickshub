@@ -6,6 +6,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def normalize_database_url(url: str | None) -> str:
+    """Normalize database connection string for SQLAlchemy with PyMySQL."""
+    if not url:
+        return ""
+    url = url.strip()
+    if url.startswith("mysql://"):
+        return url.replace("mysql://", "mysql+pymysql://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 class Config:
     """Base application configuration."""
 
@@ -43,9 +55,11 @@ class DevelopmentConfig(Config):
     """Development environment configuration."""
 
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL",
-        "mysql+pymysql://kickshub_user:kickshub_pass123@127.0.0.1:3306/kickshub",
+    SQLALCHEMY_DATABASE_URI = normalize_database_url(
+        os.getenv(
+            "DATABASE_URL",
+            "mysql+pymysql://kickshub_user:kickshub_pass123@127.0.0.1:3306/kickshub",
+        )
     )
 
 
@@ -70,12 +84,7 @@ class ProductionConfig(Config):
     """Production environment configuration."""
 
     DEBUG = False
-    _raw_db_url = os.getenv("DATABASE_URL", "")
-    SQLALCHEMY_DATABASE_URI = (
-        _raw_db_url.replace("mysql://", "mysql+pymysql://", 1)
-        if _raw_db_url.startswith("mysql://")
-        else _raw_db_url
-    )
+    SQLALCHEMY_DATABASE_URI = normalize_database_url(os.getenv("DATABASE_URL", ""))
     JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "True").lower() in ("true", "1")
     JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "None")
 

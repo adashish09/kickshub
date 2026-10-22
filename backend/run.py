@@ -1,4 +1,9 @@
 import os
+import pymysql
+
+# Alias PyMySQL as MySQLdb for external drivers
+pymysql.install_as_MySQLdb()
+
 from app import create_app
 
 app = create_app()

@@ -1,8 +1,12 @@
 import os
+import pymysql
 from flask import Flask, jsonify
 from flask_jwt_extended.exceptions import CSRFError
-from app.config import config_by_name
+from app.config import config_by_name, normalize_database_url
 from app.extensions import db, migrate, cors, jwt
+
+# Ensure standard mysql:// URLs and driver lookups map to PyMySQL
+pymysql.install_as_MySQLdb()
 
 
 def create_app(config_name=None):
@@ -15,6 +19,11 @@ def create_app(config_name=None):
 
     flask_app = Flask(__name__)
     flask_app.config.from_object(config_class)
+
+    # Normalize database URI if provided via environment
+    db_uri = flask_app.config.get("SQLALCHEMY_DATABASE_URI")
+    if db_uri:
+        flask_app.config["SQLALCHEMY_DATABASE_URI"] = normalize_database_url(db_uri)
 
     # Centralized extension initialization
     db.init_app(flask_app)
