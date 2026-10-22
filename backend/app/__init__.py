@@ -1,12 +1,17 @@
 import os
+import re
 import pymysql
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_jwt_extended.exceptions import CSRFError
 from app.config import config_by_name, normalize_database_url
 from app.extensions import db, migrate, cors, jwt
 
 # Ensure standard mysql:// URLs and driver lookups map to PyMySQL
 pymysql.install_as_MySQLdb()
+
+# Precompiled regex patterns for automated cloud platform origin matching
+VERCEL_ORIGIN_PATTERN = re.compile(r"^https://([a-zA-Z0-9_-]+\.)*vercel\.app$")
+RENDER_ORIGIN_PATTERN = re.compile(r"^https://([a-zA-Z0-9_-]+\.)*onrender\.com$")
 
 
 def create_app(config_name=None):
@@ -32,20 +37,66 @@ def create_app(config_name=None):
 
     # Configure CORS for configured origins (supports comma-separated list for production & preview domains)
     frontend_origins_raw = flask_app.config.get("FRONTEND_ORIGIN", "http://localhost:5173")
-    origins = [orig.strip() for orig in frontend_origins_raw.split(",") if orig.strip()]
+    origins = [orig.strip().rstrip("/") for orig in frontend_origins_raw.split(",") if orig.strip()]
     extra_origins = []
-    for orig in origins:
+    for orig in list(origins):
         if "localhost" in orig:
             extra_origins.append(orig.replace("localhost", "127.0.0.1"))
         elif "127.0.0.1" in orig:
             extra_origins.append(orig.replace("127.0.0.1", "localhost"))
     origins.extend(extra_origins)
+    # Always allow Vercel and Render preview and production domains
+    origins.append(VERCEL_ORIGIN_PATTERN)
+    origins.append(RENDER_ORIGIN_PATTERN)
 
     cors.init_app(
         flask_app,
         resources={r"/api/*": {"origins": origins}},
         supports_credentials=True,
+        expose_headers=["Content-Type", "X-CSRF-TOKEN", "Authorization"],
+        allow_headers=["Content-Type", "X-CSRF-TOKEN", "Authorization", "X-Requested-With", "Accept"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
+
+    def is_origin_allowed(candidate_origin: str) -> bool:
+        if not candidate_origin:
+            return False
+        clean = candidate_origin.strip().rstrip("/")
+        if clean in origins:
+            return True
+        if VERCEL_ORIGIN_PATTERN.match(clean) or RENDER_ORIGIN_PATTERN.match(clean):
+            return True
+        return False
+
+    @flask_app.before_request
+    def handle_cors_preflight():
+        if request.method == "OPTIONS":
+            candidate_origin = request.headers.get("Origin")
+            if candidate_origin and is_origin_allowed(candidate_origin):
+                response = flask_app.make_response(("", 204))
+                response.headers["Access-Control-Allow-Origin"] = candidate_origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With, Accept"
+                )
+                response.headers["Access-Control-Allow-Methods"] = (
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                )
+                return response
+
+    @flask_app.after_request
+    def add_cors_headers_after_request(response):
+        candidate_origin = request.headers.get("Origin")
+        if candidate_origin and is_origin_allowed(candidate_origin):
+            response.headers["Access-Control-Allow-Origin"] = candidate_origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-CSRF-TOKEN, X-Requested-With, Accept"
+            )
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            )
+        return response
 
     # JWT Callbacks and Blocklist Check
     @jwt.token_in_blocklist_loader
