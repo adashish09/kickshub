@@ -26,6 +26,9 @@ class RefreshToken(db.Model):
     # Relationships
     user = db.relationship("User", back_populates="refresh_tokens")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     @property
     def is_revoked(self):
         return self.revoked_at is not None

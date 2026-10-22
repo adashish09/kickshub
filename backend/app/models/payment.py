@@ -38,5 +38,8 @@ class Payment(db.Model):
     # Relationships
     order = db.relationship("Order", back_populates="payment")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Payment id={self.id} order_id={self.order_id} provider='{self.provider}' status='{self.status}'>"

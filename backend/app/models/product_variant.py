@@ -37,5 +37,8 @@ class ProductVariant(db.Model):
     cart_items = db.relationship("CartItem", back_populates="variant")
     order_items = db.relationship("OrderItem", back_populates="variant")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<ProductVariant id={self.id} sku='{self.sku}' size='{self.size}' stock={self.stock_quantity}>"

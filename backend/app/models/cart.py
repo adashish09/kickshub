@@ -26,6 +26,9 @@ class Cart(db.Model):
     user = db.relationship("User", back_populates="cart")
     items = db.relationship("CartItem", back_populates="cart", cascade="all, delete-orphan")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Cart id={self.id} user_id={self.user_id}>"
 
@@ -60,6 +63,9 @@ class CartItem(db.Model):
     # Relationships
     cart = db.relationship("Cart", back_populates="items")
     variant = db.relationship("ProductVariant", back_populates="cart_items")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"<CartItem id={self.id} cart_id={self.cart_id} variant_id={self.variant_id} quantity={self.quantity}>"

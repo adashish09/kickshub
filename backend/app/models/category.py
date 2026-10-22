@@ -21,5 +21,8 @@ class Category(db.Model):
     # Relationships
     products = db.relationship("Product", back_populates="category")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Category id={self.id} slug='{self.slug}'>"

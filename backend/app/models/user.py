@@ -31,6 +31,9 @@ class User(db.Model):
     orders = db.relationship("Order", back_populates="user")
     refresh_tokens = db.relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def set_password(self, password):
         """Hash and securely store user password."""
         self.password_hash = generate_password_hash(password)

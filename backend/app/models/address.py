@@ -32,5 +32,8 @@ class Address(db.Model):
     # Relationships
     user = db.relationship("User", back_populates="addresses")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Address id={self.id} user_id={self.user_id} city='{self.city}' postal_code='{self.postal_code}'>"

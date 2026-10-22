@@ -31,5 +31,8 @@ class Product(db.Model):
     category = db.relationship("Category", back_populates="products")
     variants = db.relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Product id={self.id} slug='{self.slug}' brand='{self.brand}'>"

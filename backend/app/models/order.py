@@ -41,6 +41,9 @@ class Order(db.Model):
     items = db.relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payment = db.relationship("Payment", back_populates="order", uselist=False)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Order id={self.id} status='{self.status}' total={self.total}>"
 
@@ -81,6 +84,9 @@ class OrderItem(db.Model):
     # Relationships
     order = db.relationship("Order", back_populates="items")
     variant = db.relationship("ProductVariant", back_populates="order_items")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"<OrderItem id={self.id} order_id={self.order_id} sku='{self.sku}' qty={self.quantity}>"
