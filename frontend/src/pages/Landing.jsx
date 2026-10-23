@@ -23,7 +23,7 @@ export default function Landing() {
         }
       } catch (err) {
         if (isMounted && err.name !== 'CanceledError') {
-          setError('Unable to load featured drops.');
+          setError(err.friendlyMessage || 'Unable to load featured drops.');
         }
       } finally {
         if (isMounted) setLoading(false);

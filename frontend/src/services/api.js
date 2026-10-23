@@ -5,7 +5,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/a
 
 const apiClient = axios.create({
   baseURL: apiBaseUrl,
-  timeout: 8000,
+  timeout: 75000, // 75 seconds to allow cloud instances (Render free tier) to spin up on cold start
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -51,7 +51,7 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response Interceptor: Queue failed requests on 401 and trigger single silent refresh
+// Response Interceptor: Queue failed requests on 401 and handle cold-start server wakeups
 let isRefreshing = false;
 let refreshQueue = [];
 
@@ -78,6 +78,7 @@ apiClient.interceptors.response.use(
       originalRequest?.url?.includes('/auth/refresh') ||
       originalRequest?.url?.includes('/auth/logout');
 
+    // 1. Silent token refresh on 401
     if (error.response?.status === 401 && !originalRequest?._retry && !isAuthEndpoint) {
       if (isRefreshing) {
         // Queue this request until current refresh finishes
@@ -111,6 +112,32 @@ apiClient.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
+    }
+
+    // 2. Automatic Cloud Cold-Start Retry: If an idempotent GET fails because the cloud instance is booting
+    const method = (originalRequest?.method || 'get').toLowerCase();
+    const isIdempotent = ['get', 'head', 'options'].includes(method);
+    const isNetworkOrColdStart =
+      !error.response ||
+      error.code === 'ECONNABORTED' ||
+      (error.response?.status >= 502 && error.response?.status <= 504);
+
+    if (isIdempotent && isNetworkOrColdStart && !isAuthEndpoint) {
+      originalRequest._coldStartRetryCount = (originalRequest._coldStartRetryCount || 0) + 1;
+      if (originalRequest._coldStartRetryCount <= 2) {
+        // Wait 2.5 seconds before retrying to give the sleeping server time to finish spinning up
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        return apiClient(originalRequest);
+      }
+    }
+
+    // 3. User-friendly formatting for timeout and network wake-up errors
+    if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
+      error.friendlyMessage =
+        'The cloud server is taking longer than usual to awaken (~60s on Render free tier). Please retry in a moment.';
+    } else if (!error.response) {
+      error.friendlyMessage =
+        'Unable to connect to the cloud server. The backend may still be spinning up from sleep mode.';
     }
 
     return Promise.reject(error);

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { getProductBySlug, formatINR } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import ChasingBlocksLoader from '../components/ChasingBlocksLoader';
 
 export default function ProductDetail() {
   const { slug } = useParams();
@@ -64,7 +65,12 @@ export default function ProductDetail() {
         if (err.response?.status === 404) {
           setError('PRODUCT_NOT_FOUND');
         } else {
-          setError(err.response?.data?.error?.message || err.message || 'Error loading product details.');
+          setError(
+            err.response?.data?.error?.message ||
+            err.friendlyMessage ||
+            err.message ||
+            'Error loading product details.'
+          );
         }
       })
       .finally(() => {
@@ -210,6 +216,11 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <div className="product-detail-container loading-container">
+        <ChasingBlocksLoader
+          title="Loading Sneaker Details"
+          subtitle="Retrieving real-time size availability, high-res angles, and variant pricing..."
+          size="md"
+        />
         <div className="detail-skeleton">
           <div className="skeleton-detail-img"></div>
           <div className="skeleton-detail-info">

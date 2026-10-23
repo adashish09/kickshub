@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../services/api';
+import ChasingBlocksLoader from '../components/ChasingBlocksLoader';
 
 export default function Cart() {
   const {
@@ -65,8 +66,11 @@ export default function Cart() {
     return (
       <div className="cart-page-wrapper">
         <div className="cart-container loading-container">
-          <div className="cart-spinner"></div>
-          <p className="cart-loading-text">Loading your sneaker bag...</p>
+          <ChasingBlocksLoader
+            title="Loading Sneaker Bag"
+            subtitle="Synchronizing your bag items, reserved sizes, and price totals..."
+            fullPage
+          />
         </div>
       </div>
     );

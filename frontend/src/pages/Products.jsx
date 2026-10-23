@@ -61,7 +61,7 @@ export default function Products() {
       })
       .catch((err) => {
         if (err.name !== 'CanceledError') {
-          const msg = err.response?.data?.error?.message || err.message || 'Unable to retrieve catalog products.';
+          const msg = err.response?.data?.error?.message || err.friendlyMessage || err.message || 'Unable to retrieve catalog products.';
           setError(msg);
         }
       })

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGetOrders, formatINR } from '../services/api';
+import ChasingBlocksLoader from '../components/ChasingBlocksLoader';
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -23,7 +24,7 @@ export default function Orders() {
       .catch((err) => {
         if (!active) return;
         setError(
-          err.response?.data?.error?.message || 'Failed to load order history.'
+          err.response?.data?.error?.message || err.friendlyMessage || 'Failed to load order history.'
         );
       })
       .finally(() => {
@@ -38,10 +39,11 @@ export default function Orders() {
   if (loading && orders.length === 0) {
     return (
       <div className="orders-page-container loading-container">
-        <div className="btn-spinner-content">
-          <span className="btn-spinner"></span>
-          <span>Loading your order history...</span>
-        </div>
+        <ChasingBlocksLoader
+          title="Loading Order History"
+          subtitle="Retrieving verified past purchases and fulfillment tracking..."
+          fullPage
+        />
       </div>
     );
   }

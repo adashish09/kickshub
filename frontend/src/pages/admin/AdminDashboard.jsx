@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { adminGetDashboard } from '../../services/api';
+import ChasingBlocksLoader from '../../components/ChasingBlocksLoader';
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
@@ -16,6 +17,7 @@ export default function AdminDashboard() {
     } catch (err) {
       setError(
         err.response?.data?.error?.message ||
+        err.friendlyMessage ||
         err.message ||
         'Failed to load administration dashboard.'
       );
@@ -31,8 +33,10 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <div className="admin-loading-state">
-        <div className="admin-spinner"></div>
-        <p>Loading real-time store metrics...</p>
+        <ChasingBlocksLoader
+          title="Loading Store Metrics"
+          subtitle="Gathering real-time GMV revenue, catalog counts, and recent purchases..."
+        />
       </div>
     );
   }
