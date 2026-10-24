@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { validateEmail } from '../utils/validation';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [serverError, setServerError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -36,10 +38,9 @@ export default function Login() {
 
   const validate = () => {
     const errors = {};
-    if (!email.trim()) {
-      errors.email = 'Email address is required.';
-    } else if (!/\S+@\S+\.\S+/.test(email.trim())) {
-      errors.email = 'Please enter a valid email address.';
+    const emailErr = validateEmail(email);
+    if (emailErr) {
+      errors.email = emailErr;
     }
 
     if (!password) {
@@ -50,9 +51,23 @@ export default function Login() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    if (field === 'email') {
+      const err = validateEmail(email);
+      setFieldErrors((prev) => ({ ...prev, email: err }));
+    } else if (field === 'password') {
+      setFieldErrors((prev) => ({
+        ...prev,
+        password: password ? null : 'Password is required.',
+      }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError('');
+    setTouched({ email: true, password: true });
 
     if (!validate()) {
       return;
@@ -101,17 +116,31 @@ export default function Login() {
             <input
               id="login-email"
               type="email"
-              className={`form-input ${fieldErrors.email ? 'input-error' : ''}`}
+              className={`form-input ${touched.email && fieldErrors.email ? 'input-error' : ''}`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
-                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: null });
+                if (touched.email) {
+                  setFieldErrors((prev) => ({ ...prev, email: validateEmail(e.target.value) }));
+                }
               }}
+              onBlur={() => handleBlur('email')}
               autoComplete="email"
               required
+              aria-invalid={touched.email && Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
             />
-            {fieldErrors.email && <span className="field-error-msg">{fieldErrors.email}</span>}
+            {touched.email && fieldErrors.email && (
+              <span className="field-error-msg" id="login-email-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.email}
+              </span>
+            )}
           </div>
 
           {/* Password Field */}
@@ -133,18 +162,35 @@ export default function Login() {
               <input
                 id="login-password"
                 type={showPassword ? 'text' : 'password'}
-                className={`form-input ${fieldErrors.password ? 'input-error' : ''}`}
+                className={`form-input ${touched.password && fieldErrors.password ? 'input-error' : ''}`}
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: null });
+                  if (touched.password) {
+                    setFieldErrors((prev) => ({
+                      ...prev,
+                      password: e.target.value ? null : 'Password is required.',
+                    }));
+                  }
                 }}
+                onBlur={() => handleBlur('password')}
                 autoComplete="current-password"
                 required
+                aria-invalid={touched.password && Boolean(fieldErrors.password)}
+                aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
               />
             </div>
-            {fieldErrors.password && <span className="field-error-msg">{fieldErrors.password}</span>}
+            {touched.password && fieldErrors.password && (
+              <span className="field-error-msg" id="login-password-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.password}
+              </span>
+            )}
           </div>
 
           {/* Submit Button */}

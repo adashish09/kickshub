@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { validatePriceRange } from '../utils/validation';
 
 export default function ProductFilters({
   filters,
@@ -13,16 +14,24 @@ export default function ProductFilters({
   const [minPriceInput, setMinPriceInput] = useState(filters.min_price || '');
   const [maxPriceInput, setMaxPriceInput] = useState(filters.max_price || '');
   const [searchInput, setSearchInput] = useState(filters.search || '');
+  const [priceError, setPriceError] = useState(null);
 
   // Keep local inputs synchronized with parent filters
   useEffect(() => {
     setMinPriceInput(filters.min_price || '');
     setMaxPriceInput(filters.max_price || '');
     setSearchInput(filters.search || '');
+    setPriceError(null);
   }, [filters]);
 
   const handlePriceApply = (e) => {
     e.preventDefault();
+    const err = validatePriceRange(minPriceInput, maxPriceInput);
+    if (err) {
+      setPriceError(err);
+      return;
+    }
+    setPriceError(null);
     onFilterChange({
       min_price: minPriceInput ? minPriceInput.trim() : '',
       max_price: maxPriceInput ? maxPriceInput.trim() : '',
@@ -223,7 +232,7 @@ export default function ProductFilters({
         {/* 6. Price Range Filter */}
         <div className="filter-group">
           <h3 className="filter-title">Price Range (₹)</h3>
-          <form onSubmit={handlePriceApply} className="price-filter-form">
+          <form onSubmit={handlePriceApply} className="price-filter-form" noValidate>
             <div className="price-inputs">
               <input
                 type="number"
@@ -231,8 +240,11 @@ export default function ProductFilters({
                 min="0"
                 step="10"
                 value={minPriceInput}
-                onChange={(e) => setMinPriceInput(e.target.value)}
-                className="price-input"
+                onChange={(e) => {
+                  setMinPriceInput(e.target.value);
+                  if (priceError) setPriceError(null);
+                }}
+                className={`price-input ${priceError ? 'input-error' : ''}`}
                 aria-label="Minimum price"
               />
               <span className="price-separator">–</span>
@@ -242,11 +254,24 @@ export default function ProductFilters({
                 min="0"
                 step="10"
                 value={maxPriceInput}
-                onChange={(e) => setMaxPriceInput(e.target.value)}
-                className="price-input"
+                onChange={(e) => {
+                  setMaxPriceInput(e.target.value);
+                  if (priceError) setPriceError(null);
+                }}
+                className={`price-input ${priceError ? 'input-error' : ''}`}
                 aria-label="Maximum price"
               />
             </div>
+            {priceError && (
+              <span className="field-error-msg" style={{ marginTop: '0.4rem', display: 'flex' }} role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {priceError}
+              </span>
+            )}
             <button type="submit" className="btn-apply-price">
               Apply
             </button>

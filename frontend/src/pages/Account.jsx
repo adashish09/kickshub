@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import {
+  validateName,
+  validatePassword,
+  validateConfirmPassword,
+} from '../utils/validation';
 
 export default function Account() {
   const { user, updateProfile, changePassword, logout } = useAuth();
@@ -9,6 +14,8 @@ export default function Account() {
   // Profile Edit State
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
+  const [nameError, setNameError] = useState(null);
+  const [nameTouched, setNameTouched] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
@@ -17,6 +24,8 @@ export default function Account() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordFieldErrors, setPasswordFieldErrors] = useState({});
+  const [passwordTouched, setPasswordTouched] = useState({});
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -32,13 +41,12 @@ export default function Account() {
     e.preventDefault();
     setProfileError('');
     setProfileSuccess('');
+    setNameTouched(true);
 
-    if (!editName.trim()) {
-      setProfileError('Name cannot be empty.');
-      return;
-    }
-    if (editName.trim().length < 2) {
-      setProfileError('Name must be at least 2 characters.');
+    const err = validateName(editName, 'Full name');
+    setNameError(err);
+    if (err) {
+      setProfileError(err);
       return;
     }
 
@@ -47,6 +55,8 @@ export default function Account() {
       await updateProfile(editName.trim());
       setProfileSuccess('Your profile name has been updated.');
       setIsEditingName(false);
+      setNameTouched(false);
+      setNameError(null);
     } catch (err) {
       setProfileError(err.message || 'Failed to update name.');
     } finally {
@@ -54,28 +64,39 @@ export default function Account() {
     }
   };
 
+  const validatePasswordFields = () => {
+    const errors = {};
+    if (!currentPassword) {
+      errors.currentPassword = 'Current password is required.';
+    }
+    const newPassErr = validatePassword(newPassword);
+    if (newPassErr) {
+      errors.newPassword = newPassErr;
+    } else if (currentPassword === newPassword) {
+      errors.newPassword = 'New password cannot be the same as your current password.';
+    }
+    const confirmErr = validateConfirmPassword(newPassword, confirmNewPassword);
+    if (confirmErr) {
+      errors.confirmNewPassword = confirmErr;
+    }
+
+    setPasswordFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleChangePassword = async (e) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
 
-    if (!currentPassword) {
-      setPasswordError('Please provide your current password.');
-      return;
-    }
+    setPasswordTouched({
+      currentPassword: true,
+      newPassword: true,
+      confirmNewPassword: true,
+    });
 
-    if (!passLengthMet || !passLetterMet || !passSpecialMet) {
-      setPasswordError('New password does not meet the security criteria.');
-      return;
-    }
-
-    if (currentPassword === newPassword) {
-      setPasswordError('New password cannot be the same as your current password.');
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setPasswordError('New passwords do not match.');
+    if (!validatePasswordFields()) {
+      setPasswordError('Please resolve the errors highlighted below.');
       return;
     }
 
@@ -190,7 +211,7 @@ export default function Account() {
             )}
 
             {isEditingName ? (
-              <form onSubmit={handleUpdateName} className="profile-edit-form">
+              <form onSubmit={handleUpdateName} className="profile-edit-form" noValidate>
                 <div className="form-group">
                   <label htmlFor="edit-name-input" className="form-label">
                     Full Name
@@ -198,11 +219,32 @@ export default function Account() {
                   <input
                     id="edit-name-input"
                     type="text"
-                    className="form-input"
+                    className={`form-input ${nameTouched && nameError ? 'input-error' : ''}`}
                     value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
+                    onChange={(e) => {
+                      setEditName(e.target.value);
+                      if (nameTouched) {
+                        setNameError(validateName(e.target.value, 'Full name'));
+                      }
+                    }}
+                    onBlur={() => {
+                      setNameTouched(true);
+                      setNameError(validateName(editName, 'Full name'));
+                    }}
                     required
+                    aria-invalid={nameTouched && Boolean(nameError)}
+                    aria-describedby={nameError ? 'edit-name-error' : undefined}
                   />
+                  {nameTouched && nameError && (
+                    <span className="field-error-msg" id="edit-name-error" role="alert">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                      {nameError}
+                    </span>
+                  )}
                 </div>
                 <div className="form-actions-inline">
                   <button
@@ -219,6 +261,8 @@ export default function Account() {
                     onClick={() => {
                       setIsEditingName(false);
                       setProfileError('');
+                      setNameError(null);
+                      setNameTouched(false);
                     }}
                     disabled={profileLoading}
                   >
@@ -312,13 +356,40 @@ export default function Account() {
                 <input
                   id="current-password"
                   type={showCurrentPassword ? 'text' : 'password'}
-                  className="form-input"
+                  className={`form-input ${passwordTouched.currentPassword && passwordFieldErrors.currentPassword ? 'input-error' : ''}`}
                   placeholder="Enter current password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    if (passwordTouched.currentPassword) {
+                      setPasswordFieldErrors((prev) => ({
+                        ...prev,
+                        currentPassword: e.target.value ? null : 'Current password is required.',
+                      }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setPasswordTouched((prev) => ({ ...prev, currentPassword: true }));
+                    setPasswordFieldErrors((prev) => ({
+                      ...prev,
+                      currentPassword: currentPassword ? null : 'Current password is required.',
+                    }));
+                  }}
                   autoComplete="current-password"
                   required
+                  aria-invalid={passwordTouched.currentPassword && Boolean(passwordFieldErrors.currentPassword)}
+                  aria-describedby={passwordFieldErrors.currentPassword ? 'current-password-error' : undefined}
                 />
+                {passwordTouched.currentPassword && passwordFieldErrors.currentPassword && (
+                  <span className="field-error-msg" id="current-password-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {passwordFieldErrors.currentPassword}
+                  </span>
+                )}
               </div>
 
               {/* New Password */}
@@ -339,13 +410,46 @@ export default function Account() {
                 <input
                   id="new-password"
                   type={showNewPassword ? 'text' : 'password'}
-                  className="form-input"
+                  className={`form-input ${passwordTouched.newPassword && passwordFieldErrors.newPassword ? 'input-error' : ''}`}
                   placeholder="Enter new password (min. 8 characters)"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (passwordTouched.newPassword) {
+                      setPasswordFieldErrors((prev) => ({
+                        ...prev,
+                        newPassword: validatePassword(e.target.value),
+                      }));
+                    }
+                    if (passwordTouched.confirmNewPassword && confirmNewPassword) {
+                      setPasswordFieldErrors((prev) => ({
+                        ...prev,
+                        confirmNewPassword: validateConfirmPassword(e.target.value, confirmNewPassword),
+                      }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setPasswordTouched((prev) => ({ ...prev, newPassword: true }));
+                    setPasswordFieldErrors((prev) => ({
+                      ...prev,
+                      newPassword: validatePassword(newPassword),
+                    }));
+                  }}
                   autoComplete="new-password"
                   required
+                  aria-invalid={passwordTouched.newPassword && Boolean(passwordFieldErrors.newPassword)}
+                  aria-describedby={passwordFieldErrors.newPassword ? 'new-password-error' : undefined}
                 />
+                {passwordTouched.newPassword && passwordFieldErrors.newPassword && (
+                  <span className="field-error-msg" id="new-password-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {passwordFieldErrors.newPassword}
+                  </span>
+                )}
 
                 {/* Password Criteria Checklist */}
                 <div className="password-checklist">
@@ -372,13 +476,40 @@ export default function Account() {
                 <input
                   id="confirm-new-password"
                   type="password"
-                  className="form-input"
+                  className={`form-input ${passwordTouched.confirmNewPassword && passwordFieldErrors.confirmNewPassword ? 'input-error' : ''}`}
                   placeholder="Re-enter new password"
                   value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmNewPassword(e.target.value);
+                    if (passwordTouched.confirmNewPassword) {
+                      setPasswordFieldErrors((prev) => ({
+                        ...prev,
+                        confirmNewPassword: validateConfirmPassword(newPassword, e.target.value),
+                      }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setPasswordTouched((prev) => ({ ...prev, confirmNewPassword: true }));
+                    setPasswordFieldErrors((prev) => ({
+                      ...prev,
+                      confirmNewPassword: validateConfirmPassword(newPassword, confirmNewPassword),
+                    }));
+                  }}
                   autoComplete="new-password"
                   required
+                  aria-invalid={passwordTouched.confirmNewPassword && Boolean(passwordFieldErrors.confirmNewPassword)}
+                  aria-describedby={passwordFieldErrors.confirmNewPassword ? 'confirm-new-password-error' : undefined}
                 />
+                {passwordTouched.confirmNewPassword && passwordFieldErrors.confirmNewPassword && (
+                  <span className="field-error-msg" id="confirm-new-password-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {passwordFieldErrors.confirmNewPassword}
+                  </span>
+                )}
               </div>
 
               <div className="security-notice-box">

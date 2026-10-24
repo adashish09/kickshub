@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import {
+  validateName,
+  validateEmail,
+  validatePassword,
+  validateConfirmPassword,
+} from '../utils/validation';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -11,6 +17,7 @@ export default function Register() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [fieldErrors, setFieldErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [serverError, setServerError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -32,37 +39,47 @@ export default function Register() {
   const validate = () => {
     const errors = {};
 
-    if (!name.trim()) {
-      errors.name = 'Full name is required.';
-    } else if (name.trim().length < 2) {
-      errors.name = 'Name must be at least 2 characters.';
-    }
+    const nameErr = validateName(name, 'Full name');
+    if (nameErr) errors.name = nameErr;
 
-    if (!email.trim()) {
-      errors.email = 'Email address is required.';
-    } else if (!/\S+@\S+\.\S+/.test(email.trim())) {
-      errors.email = 'Please provide a valid email address.';
-    }
+    const emailErr = validateEmail(email);
+    if (emailErr) errors.email = emailErr;
 
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (!passLengthMet || !passLetterMet || !passSpecialMet) {
-      errors.password = 'Password must meet all requirement criteria listed below.';
-    }
+    const passErr = validatePassword(password);
+    if (passErr) errors.password = passErr;
 
-    if (!confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password.';
-    } else if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match.';
-    }
+    const confirmErr = validateConfirmPassword(password, confirmPassword);
+    if (confirmErr) errors.confirmPassword = confirmErr;
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    if (field === 'name') {
+      setFieldErrors((prev) => ({ ...prev, name: validateName(name, 'Full name') }));
+    } else if (field === 'email') {
+      setFieldErrors((prev) => ({ ...prev, email: validateEmail(email) }));
+    } else if (field === 'password') {
+      setFieldErrors((prev) => ({ ...prev, password: validatePassword(password) }));
+    } else if (field === 'confirmPassword') {
+      setFieldErrors((prev) => ({
+        ...prev,
+        confirmPassword: validateConfirmPassword(password, confirmPassword),
+      }));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError('');
+    setTouched({
+      name: true,
+      email: true,
+      password: true,
+      confirmPassword: true,
+    });
 
     if (!validate()) {
       return;
@@ -113,50 +130,78 @@ export default function Register() {
           {/* Full Name */}
           <div className="form-group">
             <label htmlFor="register-name" className="form-label">
-              Full Name
+              Full Name *
             </label>
             <input
               id="register-name"
               type="text"
-              className={`form-input ${fieldErrors.name ? 'input-error' : ''}`}
+              className={`form-input ${touched.name && fieldErrors.name ? 'input-error' : ''}`}
               placeholder="e.g. Michael Jordan"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                if (fieldErrors.name) setFieldErrors({ ...fieldErrors, name: null });
+                if (touched.name) {
+                  setFieldErrors((prev) => ({ ...prev, name: validateName(e.target.value, 'Full name') }));
+                }
               }}
+              onBlur={() => handleBlur('name')}
               autoComplete="name"
               required
+              aria-invalid={touched.name && Boolean(fieldErrors.name)}
+              aria-describedby={fieldErrors.name ? 'register-name-error' : undefined}
             />
-            {fieldErrors.name && <span className="field-error-msg">{fieldErrors.name}</span>}
+            {touched.name && fieldErrors.name && (
+              <span className="field-error-msg" id="register-name-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.name}
+              </span>
+            )}
           </div>
 
           {/* Email Address */}
           <div className="form-group">
             <label htmlFor="register-email" className="form-label">
-              Email Address
+              Email Address *
             </label>
             <input
               id="register-email"
               type="email"
-              className={`form-input ${fieldErrors.email ? 'input-error' : ''}`}
+              className={`form-input ${touched.email && fieldErrors.email ? 'input-error' : ''}`}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
-                if (fieldErrors.email) setFieldErrors({ ...fieldErrors, email: null });
+                if (touched.email) {
+                  setFieldErrors((prev) => ({ ...prev, email: validateEmail(e.target.value) }));
+                }
               }}
+              onBlur={() => handleBlur('email')}
               autoComplete="email"
               required
+              aria-invalid={touched.email && Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
             />
-            {fieldErrors.email && <span className="field-error-msg">{fieldErrors.email}</span>}
+            {touched.email && fieldErrors.email && (
+              <span className="field-error-msg" id="register-email-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.email}
+              </span>
+            )}
           </div>
 
           {/* Password */}
           <div className="form-group">
             <div className="form-label-row">
               <label htmlFor="register-password" className="form-label">
-                Password
+                Password *
               </label>
               <button
                 type="button"
@@ -170,17 +215,37 @@ export default function Register() {
             <input
               id="register-password"
               type={showPassword ? 'text' : 'password'}
-              className={`form-input ${fieldErrors.password ? 'input-error' : ''}`}
+              className={`form-input ${touched.password && fieldErrors.password ? 'input-error' : ''}`}
               placeholder="Create a strong password"
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
-                if (fieldErrors.password) setFieldErrors({ ...fieldErrors, password: null });
+                if (touched.password) {
+                  setFieldErrors((prev) => ({ ...prev, password: validatePassword(e.target.value) }));
+                }
+                if (touched.confirmPassword && confirmPassword) {
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    confirmPassword: validateConfirmPassword(e.target.value, confirmPassword),
+                  }));
+                }
               }}
+              onBlur={() => handleBlur('password')}
               autoComplete="new-password"
               required
+              aria-invalid={touched.password && Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
             />
-            {fieldErrors.password && <span className="field-error-msg">{fieldErrors.password}</span>}
+            {touched.password && fieldErrors.password && (
+              <span className="field-error-msg" id="register-password-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.password}
+              </span>
+            )}
 
             {/* Password Criteria Checklist */}
             <div className="password-checklist">
@@ -203,7 +268,7 @@ export default function Register() {
           <div className="form-group">
             <div className="form-label-row">
               <label htmlFor="register-confirm-password" className="form-label">
-                Confirm Password
+                Confirm Password *
               </label>
               <button
                 type="button"
@@ -217,20 +282,33 @@ export default function Register() {
             <input
               id="register-confirm-password"
               type={showConfirmPassword ? 'text' : 'password'}
-              className={`form-input ${fieldErrors.confirmPassword ? 'input-error' : ''}`}
+              className={`form-input ${touched.confirmPassword && fieldErrors.confirmPassword ? 'input-error' : ''}`}
               placeholder="Re-enter your password"
               value={confirmPassword}
               onChange={(e) => {
                 setConfirmPassword(e.target.value);
-                if (fieldErrors.confirmPassword) {
-                  setFieldErrors({ ...fieldErrors, confirmPassword: null });
+                if (touched.confirmPassword) {
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    confirmPassword: validateConfirmPassword(password, e.target.value),
+                  }));
                 }
               }}
+              onBlur={() => handleBlur('confirmPassword')}
               autoComplete="new-password"
               required
+              aria-invalid={touched.confirmPassword && Boolean(fieldErrors.confirmPassword)}
+              aria-describedby={fieldErrors.confirmPassword ? 'register-confirm-password-error' : undefined}
             />
-            {fieldErrors.confirmPassword && (
-              <span className="field-error-msg">{fieldErrors.confirmPassword}</span>
+            {touched.confirmPassword && fieldErrors.confirmPassword && (
+              <span className="field-error-msg" id="register-confirm-password-error" role="alert">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                {fieldErrors.confirmPassword}
+              </span>
             )}
           </div>
 

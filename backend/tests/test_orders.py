@@ -535,3 +535,66 @@ def test_address_management_endpoints(app, client):
     # List again -> 1 address
     res_list2 = client.get("/api/v1/addresses", headers={"Authorization": f"Bearer {token}"})
     assert len(res_list2.get_json()["addresses"]) == 1
+
+
+def test_address_validation_rules(app, client):
+    """Test strict validation of phone numbers, postal codes, and names."""
+    token = register_and_login(client, "validation_tester@kickshub.local")
+    valid_base = {
+        "recipient_name": "Rohan Verma",
+        "phone": "+91 98765 43210",
+        "line1": "Flat 401, Galaxy Heights",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "postal_code": "560001",
+        "country": "India",
+    }
+
+    # 1. Invalid phone numbers
+    invalid_phones = [
+        "",  # empty
+        "phone_number",  # alphabetic
+        "12345",  # too short (< 10 digits)
+        "98765432109876543210",  # too long (> 15 digits)
+        "1234567890",  # starts with 1 (invalid for Indian mobile)
+        "+91 52345 67890",  # starts with 5 (invalid Indian mobile)
+    ]
+    for bad_phone in invalid_phones:
+        payload = {**valid_base, "phone": bad_phone}
+        res = client.post("/api/v1/addresses", json=payload, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 400, f"Expected 400 for bad phone '{bad_phone}', got {res.status_code}"
+        assert res.get_json()["error"]["code"] == "INVALID_PHONE"
+
+    # 2. Invalid postal codes (India PIN code must be 6 digits)
+    invalid_pins = [
+        "",  # empty
+        "5600",  # too short
+        "5600001",  # 7 digits
+        "abcde1",  # letters
+        "012345",  # starts with 0
+    ]
+    for bad_pin in invalid_pins:
+        payload = {**valid_base, "postal_code": bad_pin}
+        res = client.post("/api/v1/addresses", json=payload, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 400, f"Expected 400 for bad PIN '{bad_pin}', got {res.status_code}"
+        assert res.get_json()["error"]["code"] == "INVALID_POSTAL_CODE"
+
+    # 3. Invalid recipient name
+    invalid_names = [
+        "",  # empty
+        "A",  # too short (< 2)
+        "12345",  # numbers only
+        "!!!",  # symbols only
+    ]
+    for bad_name in invalid_names:
+        payload = {**valid_base, "recipient_name": bad_name}
+        res = client.post("/api/v1/addresses", json=payload, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 400, f"Expected 400 for bad name '{bad_name}', got {res.status_code}"
+        assert res.get_json()["error"]["code"] == "INVALID_RECIPIENT_NAME"
+
+    # 4. Invalid line1
+    payload = {**valid_base, "line1": "Flat"}  # too short (< 5 chars)
+    res = client.post("/api/v1/addresses", json=payload, headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 400
+    assert res.get_json()["error"]["code"] == "INVALID_LINE1"
+

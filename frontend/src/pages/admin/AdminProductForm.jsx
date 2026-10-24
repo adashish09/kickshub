@@ -6,6 +6,12 @@ import {
   adminUpdateProduct,
   getCategories,
 } from '../../services/api';
+import {
+  validateName,
+  validateSku,
+  validatePrice,
+  validateStock,
+} from '../../utils/validation';
 
 export default function AdminProductForm() {
   const { productId } = useParams();
@@ -25,6 +31,10 @@ export default function AdminProductForm() {
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [isActive, setIsActive] = useState(true);
+
+  // Field validation and touched states
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   // Variants array
   const [variants, setVariants] = useState([
@@ -90,6 +100,67 @@ export default function AdminProductForm() {
     };
   }, [productId, isEditing]);
 
+  const validateVariant = (v, allVariants, index) => {
+    const errs = {};
+    const skuErr = validateSku(v.sku);
+    if (skuErr) {
+      errs.sku = skuErr;
+    } else {
+      const normalizedSku = v.sku.trim().toUpperCase();
+      const isDuplicate = allVariants.some(
+        (other, otherIdx) => otherIdx !== index && (other.sku || '').trim().toUpperCase() === normalizedSku
+      );
+      if (isDuplicate) {
+        errs.sku = 'Duplicate SKU within variants.';
+      }
+    }
+
+    if (!v.size || !v.size.trim()) {
+      errs.size = 'Size is required.';
+    }
+
+    if (!v.color || !v.color.trim()) {
+      errs.color = 'Colorway is required.';
+    }
+
+    const priceErr = validatePrice(v.price, 'Price');
+    if (priceErr) errs.price = priceErr;
+
+    const stockErr = validateStock(v.stock_quantity, 'Stock quantity');
+    if (stockErr) errs.stock_quantity = stockErr;
+
+    return errs;
+  };
+
+  const validateAll = () => {
+    const errors = {};
+    const nameErr = validateName(name, 'Sneaker model name');
+    if (nameErr) errors.name = nameErr;
+
+    if (!brand || !brand.trim()) {
+      errors.brand = 'Brand is required.';
+    }
+
+    if (!categoryId) {
+      errors.categoryId = 'Please select a product category.';
+    }
+
+    if (imageUrl && imageUrl.trim()) {
+      if (!/^https?:\/\/.+/i.test(imageUrl.trim())) {
+        errors.imageUrl = 'Image URL must begin with http:// or https://.';
+      }
+    }
+
+    const variantErrors = variants.map((v, i) => validateVariant(v, variants, i));
+    const hasVariantErrors = variantErrors.some((vErrs) => Object.keys(vErrs).length > 0);
+    if (hasVariantErrors) {
+      errors.variants = variantErrors;
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleAddVariant = () => {
     const nextSuffix = variants.length + 1;
     const baseSku = (name.slice(0, 3).toUpperCase() || 'SKU') + `-UK${8 + (nextSuffix % 4)}`;
@@ -106,9 +177,34 @@ export default function AdminProductForm() {
   };
 
   const handleVariantChange = (index, field, value) => {
-    setVariants((prev) =>
-      prev.map((v, i) => (i === index ? { ...v, [field]: value } : v))
-    );
+    setVariants((prev) => {
+      const updated = prev.map((v, i) => (i === index ? { ...v, [field]: value } : v));
+      // If variant was touched, update its validation
+      if (touched.variants?.[index]?.[field]) {
+        const vErrs = validateVariant(updated[index], updated, index);
+        setFieldErrors((curr) => {
+          const currentVarErrs = [...(curr.variants || [])];
+          currentVarErrs[index] = vErrs;
+          return { ...curr, variants: currentVarErrs };
+        });
+      }
+      return updated;
+    });
+  };
+
+  const handleVariantBlur = (index, field) => {
+    setTouched((prev) => {
+      const currTouchedVariants = [...(prev.variants || [])];
+      currTouchedVariants[index] = { ...(currTouchedVariants[index] || {}), [field]: true };
+      return { ...prev, variants: currTouchedVariants };
+    });
+
+    const vErrs = validateVariant(variants[index], variants, index);
+    setFieldErrors((prev) => {
+      const currentVarErrs = [...(prev.variants || [])];
+      currentVarErrs[index] = vErrs;
+      return { ...prev, variants: currentVarErrs };
+    });
   };
 
   const handleRemoveVariant = (index) => {
@@ -117,44 +213,39 @@ export default function AdminProductForm() {
       return;
     }
     setVariants((prev) => prev.filter((_, i) => i !== index));
+    setFieldErrors((prev) => {
+      if (!prev.variants) return prev;
+      return { ...prev, variants: prev.variants.filter((_, i) => i !== index) };
+    });
+    setTouched((prev) => {
+      if (!prev.variants) return prev;
+      return { ...prev, variants: prev.variants.filter((_, i) => i !== index) };
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
 
-    if (!name.trim()) {
-      setError('Product name is required.');
-      return;
-    }
-    if (!brand.trim()) {
-      setError('Brand is required.');
-      return;
-    }
-    if (!categoryId) {
-      setError('Please select a category.');
-      return;
-    }
-    if (variants.length === 0) {
-      setError('At least one variant must be configured.');
-      return;
-    }
+    // Mark all as touched
+    const touchedVariants = variants.map(() => ({
+      sku: true,
+      size: true,
+      color: true,
+      price: true,
+      stock_quantity: true,
+    }));
+    setTouched({
+      name: true,
+      brand: true,
+      categoryId: true,
+      imageUrl: true,
+      variants: touchedVariants,
+    });
 
-    // Validate variant SKUs
-    for (let i = 0; i < variants.length; i++) {
-      const v = variants[i];
-      if (!v.sku || !v.sku.trim()) {
-        setError(`Variant #${i + 1} is missing a SKU.`);
-        return;
-      }
-      if (!v.size) {
-        setError(`Variant #${i + 1} requires a size.`);
-        return;
-      }
-      if (!v.color) {
-        setError(`Variant #${i + 1} requires a colorway.`);
-        return;
-      }
+    if (!validateAll()) {
+      setError('Please resolve all highlighted field validation errors before saving.');
+      return;
     }
 
     setSaving(true);
@@ -225,7 +316,7 @@ export default function AdminProductForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="admin-entity-form">
+      <form onSubmit={handleSubmit} className="admin-entity-form" noValidate>
         <div className="admin-form-grid">
           {/* Left Column: Core Product Metadata */}
           <div className="admin-form-col">
@@ -241,10 +332,31 @@ export default function AdminProductForm() {
                   type="text"
                   placeholder="e.g. Air Velocity Pro"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (touched.name) {
+                      setFieldErrors((curr) => ({ ...curr, name: validateName(e.target.value, 'Sneaker model name') }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setTouched((curr) => ({ ...curr, name: true }));
+                    setFieldErrors((curr) => ({ ...curr, name: validateName(name, 'Sneaker model name') }));
+                  }}
+                  className={`form-input ${touched.name && fieldErrors.name ? 'input-error' : ''}`}
                   required
+                  aria-invalid={touched.name && Boolean(fieldErrors.name)}
+                  aria-describedby={fieldErrors.name ? 'product-name-error' : undefined}
                 />
+                {touched.name && fieldErrors.name && (
+                  <span className="field-error-msg" id="product-name-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {fieldErrors.name}
+                  </span>
+                )}
               </div>
 
               <div className="form-row-2">
@@ -257,10 +369,31 @@ export default function AdminProductForm() {
                     type="text"
                     placeholder="e.g. Nike, Jordan, Adidas, Puma"
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className="form-input"
+                    onChange={(e) => {
+                      setBrand(e.target.value);
+                      if (touched.brand) {
+                        setFieldErrors((curr) => ({ ...curr, brand: e.target.value.trim() ? null : 'Brand is required.' }));
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouched((curr) => ({ ...curr, brand: true }));
+                      setFieldErrors((curr) => ({ ...curr, brand: brand.trim() ? null : 'Brand is required.' }));
+                    }}
+                    className={`form-input ${touched.brand && fieldErrors.brand ? 'input-error' : ''}`}
                     required
+                    aria-invalid={touched.brand && Boolean(fieldErrors.brand)}
+                    aria-describedby={fieldErrors.brand ? 'product-brand-error' : undefined}
                   />
+                  {touched.brand && fieldErrors.brand && (
+                    <span className="field-error-msg" id="product-brand-error" role="alert">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                      {fieldErrors.brand}
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -270,9 +403,20 @@ export default function AdminProductForm() {
                   <select
                     id="product-category"
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="form-select"
+                    onChange={(e) => {
+                      setCategoryId(e.target.value);
+                      if (touched.categoryId) {
+                        setFieldErrors((curr) => ({ ...curr, categoryId: e.target.value ? null : 'Please select a category.' }));
+                      }
+                    }}
+                    onBlur={() => {
+                      setTouched((curr) => ({ ...curr, categoryId: true }));
+                      setFieldErrors((curr) => ({ ...curr, categoryId: categoryId ? null : 'Please select a category.' }));
+                    }}
+                    className={`form-select ${touched.categoryId && fieldErrors.categoryId ? 'input-error' : ''}`}
                     required
+                    aria-invalid={touched.categoryId && Boolean(fieldErrors.categoryId)}
+                    aria-describedby={fieldErrors.categoryId ? 'product-category-error' : undefined}
                   >
                     <option value="">Select Category</option>
                     {categories.map((c) => (
@@ -281,6 +425,16 @@ export default function AdminProductForm() {
                       </option>
                     ))}
                   </select>
+                  {touched.categoryId && fieldErrors.categoryId && (
+                    <span className="field-error-msg" id="product-category-error" role="alert">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                      {fieldErrors.categoryId}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -321,9 +475,36 @@ export default function AdminProductForm() {
                   type="url"
                   placeholder="https://images.unsplash.com/..."
                   value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => {
+                    setImageUrl(e.target.value);
+                    if (touched.imageUrl && e.target.value.trim() && !/^https?:\/\/.+/i.test(e.target.value.trim())) {
+                      setFieldErrors((curr) => ({ ...curr, imageUrl: 'Image URL must begin with http:// or https://.' }));
+                    } else if (touched.imageUrl) {
+                      setFieldErrors((curr) => ({ ...curr, imageUrl: null }));
+                    }
+                  }}
+                  onBlur={() => {
+                    setTouched((curr) => ({ ...curr, imageUrl: true }));
+                    if (imageUrl.trim() && !/^https?:\/\/.+/i.test(imageUrl.trim())) {
+                      setFieldErrors((curr) => ({ ...curr, imageUrl: 'Image URL must begin with http:// or https://.' }));
+                    } else {
+                      setFieldErrors((curr) => ({ ...curr, imageUrl: null }));
+                    }
+                  }}
+                  className={`form-input ${touched.imageUrl && fieldErrors.imageUrl ? 'input-error' : ''}`}
+                  aria-invalid={touched.imageUrl && Boolean(fieldErrors.imageUrl)}
+                  aria-describedby={fieldErrors.imageUrl ? 'product-image-error' : undefined}
                 />
+                {touched.imageUrl && fieldErrors.imageUrl && (
+                  <span className="field-error-msg" id="product-image-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {fieldErrors.imageUrl}
+                  </span>
+                )}
                 {imageUrl && (
                   <div className="form-image-preview">
                     <img src={imageUrl} alt="Preview" onError={(e) => (e.target.style.display = 'none')} />
@@ -365,86 +546,116 @@ export default function AdminProductForm() {
               </p>
 
               <div className="variants-editor-list">
-                {variants.map((v, idx) => (
-                  <div key={idx} className="variant-editor-card">
-                    <div className="variant-card-header">
-                      <span className="variant-num">Variant #{idx + 1}</span>
-                      {variants.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveVariant(idx)}
-                          className="btn-remove-variant"
-                          title="Remove variant"
-                        >
-                          Remove ×
-                        </button>
-                      )}
+                {variants.map((v, idx) => {
+                  const vErrs = fieldErrors.variants?.[idx] || {};
+                  const vTouched = touched.variants?.[idx] || {};
+
+                  return (
+                    <div key={idx} className="variant-editor-card">
+                      <div className="variant-card-header">
+                        <span className="variant-num">Variant #{idx + 1}</span>
+                        {variants.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVariant(idx)}
+                            className="btn-remove-variant"
+                            title="Remove variant"
+                          >
+                            Remove ×
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="variant-fields-grid">
+                        {/* SKU */}
+                        <div className="form-group">
+                          <label className="form-label-sm">SKU *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. AVP-RED-UK8"
+                            value={v.sku}
+                            onChange={(e) => handleVariantChange(idx, 'sku', e.target.value)}
+                            onBlur={() => handleVariantBlur(idx, 'sku')}
+                            className={`form-input form-input-sm ${vTouched.sku && vErrs.sku ? 'input-error' : ''}`}
+                            required
+                          />
+                          {vTouched.sku && vErrs.sku && (
+                            <span className="field-error-msg">{vErrs.sku}</span>
+                          )}
+                        </div>
+
+                        {/* Size */}
+                        <div className="form-group">
+                          <label className="form-label-sm">Size *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. UK 8"
+                            value={v.size}
+                            onChange={(e) => handleVariantChange(idx, 'size', e.target.value)}
+                            onBlur={() => handleVariantBlur(idx, 'size')}
+                            className={`form-input form-input-sm ${vTouched.size && vErrs.size ? 'input-error' : ''}`}
+                            required
+                          />
+                          {vTouched.size && vErrs.size && (
+                            <span className="field-error-msg">{vErrs.size}</span>
+                          )}
+                        </div>
+
+                        {/* Color */}
+                        <div className="form-group">
+                          <label className="form-label-sm">Color *</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Bred, Cloud White"
+                            value={v.color}
+                            onChange={(e) => handleVariantChange(idx, 'color', e.target.value)}
+                            onBlur={() => handleVariantBlur(idx, 'color')}
+                            className={`form-input form-input-sm ${vTouched.color && vErrs.color ? 'input-error' : ''}`}
+                            required
+                          />
+                          {vTouched.color && vErrs.color && (
+                            <span className="field-error-msg">{vErrs.color}</span>
+                          )}
+                        </div>
+
+                        {/* Price */}
+                        <div className="form-group">
+                          <label className="form-label-sm">Price (₹) *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={v.price}
+                            onChange={(e) => handleVariantChange(idx, 'price', e.target.value)}
+                            onBlur={() => handleVariantBlur(idx, 'price')}
+                            className={`form-input form-input-sm ${vTouched.price && vErrs.price ? 'input-error' : ''}`}
+                            required
+                          />
+                          {vTouched.price && vErrs.price && (
+                            <span className="field-error-msg">{vErrs.price}</span>
+                          )}
+                        </div>
+
+                        {/* Stock Quantity */}
+                        <div className="form-group">
+                          <label className="form-label-sm">Stock Quantity *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={v.stock_quantity}
+                            onChange={(e) => handleVariantChange(idx, 'stock_quantity', e.target.value)}
+                            onBlur={() => handleVariantBlur(idx, 'stock_quantity')}
+                            className={`form-input form-input-sm ${vTouched.stock_quantity && vErrs.stock_quantity ? 'input-error' : ''}`}
+                            required
+                          />
+                          {vTouched.stock_quantity && vErrs.stock_quantity && (
+                            <span className="field-error-msg">{vErrs.stock_quantity}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="variant-fields-grid">
-                      <div className="form-group">
-                        <label className="form-label-sm">SKU *</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. AVP-RED-UK8"
-                          value={v.sku}
-                          onChange={(e) => handleVariantChange(idx, 'sku', e.target.value)}
-                          className="form-input form-input-sm"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label-sm">Size *</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. UK 8"
-                          value={v.size}
-                          onChange={(e) => handleVariantChange(idx, 'size', e.target.value)}
-                          className="form-input form-input-sm"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label-sm">Color *</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Bred, Cloud White"
-                          value={v.color}
-                          onChange={(e) => handleVariantChange(idx, 'color', e.target.value)}
-                          className="form-input form-input-sm"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label-sm">Price (₹) *</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={v.price}
-                          onChange={(e) => handleVariantChange(idx, 'price', e.target.value)}
-                          className="form-input form-input-sm"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label-sm">Stock Quantity *</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={v.stock_quantity}
-                          onChange={(e) => handleVariantChange(idx, 'stock_quantity', e.target.value)}
-                          className="form-input form-input-sm"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

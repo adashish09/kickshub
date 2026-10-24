@@ -8,6 +8,14 @@ import {
   apiCreateOrder,
   formatINR,
 } from '../services/api';
+import {
+  validatePhone,
+  formatPhoneInput,
+  validatePostalCode,
+  validateName,
+  validateAddressLine,
+  validateCityOrState,
+} from '../utils/validation';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -31,6 +39,8 @@ export default function Checkout() {
     postal_code: '',
     country: 'India',
   });
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [touched, setTouched] = useState({});
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressError, setAddressError] = useState('');
 
@@ -69,31 +79,98 @@ export default function Checkout() {
     };
   }, []);
 
+  const validateField = (name, value, country = newAddress.country) => {
+    switch (name) {
+      case 'recipient_name':
+        return validateName(value, 'Recipient name');
+      case 'phone':
+        return validatePhone(value, country);
+      case 'line1':
+        return validateAddressLine(value, 'Street address line 1');
+      case 'city':
+        return validateCityOrState(value, 'City');
+      case 'state':
+        return validateCityOrState(value, 'State');
+      case 'postal_code':
+        return validatePostalCode(value, country);
+      default:
+        return null;
+    }
+  };
+
+  const validateAllFields = () => {
+    const errors = {
+      recipient_name: validateField('recipient_name', newAddress.recipient_name),
+      phone: validateField('phone', newAddress.phone),
+      line1: validateField('line1', newAddress.line1),
+      city: validateField('city', newAddress.city),
+      state: validateField('state', newAddress.state),
+      postal_code: validateField('postal_code', newAddress.postal_code),
+    };
+
+    const activeErrors = {};
+    Object.keys(errors).forEach((key) => {
+      if (errors[key]) {
+        activeErrors[key] = errors[key];
+      }
+    });
+    setFieldErrors(activeErrors);
+    return Object.keys(activeErrors).length === 0;
+  };
+
   const handleAddressInputChange = (e) => {
     const { name, value } = e.target;
-    setNewAddress((prev) => ({ ...prev, [name]: value }));
+    let formattedVal = value;
+    if (name === 'phone') {
+      formattedVal = formatPhoneInput(value);
+    }
+    setNewAddress((prev) => ({ ...prev, [name]: formattedVal }));
+
+    // If field was already touched, validate live
+    if (touched[name]) {
+      const err = validateField(name, formattedVal);
+      setFieldErrors((prev) => ({ ...prev, [name]: err }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched((prev) => ({ ...prev, [name]: true }));
+    const err = validateField(name, value);
+    setFieldErrors((prev) => ({ ...prev, [name]: err }));
   };
 
   const handleSaveAddress = async (e) => {
     e.preventDefault();
     setAddressError('');
 
-    if (!newAddress.recipient_name.trim()) {
-      setAddressError('Recipient name is required.');
-      return;
-    }
-    if (!newAddress.line1.trim()) {
-      setAddressError('Address line 1 is required.');
-      return;
-    }
-    if (!newAddress.city.trim() || !newAddress.state.trim() || !newAddress.postal_code.trim()) {
-      setAddressError('City, State, and Postal Code are required.');
+    // Mark all required fields as touched
+    setTouched({
+      recipient_name: true,
+      phone: true,
+      line1: true,
+      city: true,
+      state: true,
+      postal_code: true,
+    });
+
+    if (!validateAllFields()) {
+      setAddressError('Please resolve all highlighted field errors before saving.');
       return;
     }
 
     setSavingAddress(true);
     try {
-      const data = await apiCreateAddress(newAddress);
+      const data = await apiCreateAddress({
+        recipient_name: newAddress.recipient_name.trim(),
+        phone: newAddress.phone.trim(),
+        line1: newAddress.line1.trim(),
+        line2: newAddress.line2.trim(),
+        city: newAddress.city.trim(),
+        state: newAddress.state.trim(),
+        postal_code: newAddress.postal_code.trim(),
+        country: newAddress.country.trim() || 'India',
+      });
       const created = data.address;
       setAddresses((prev) => [created, ...prev]);
       setSelectedAddressId(created.id);
@@ -109,6 +186,8 @@ export default function Checkout() {
         postal_code: '',
         country: 'India',
       });
+      setFieldErrors({});
+      setTouched({});
     } catch (err) {
       setAddressError(
         err.response?.data?.error?.message || 'Failed to save address.'
@@ -262,14 +341,20 @@ export default function Checkout() {
 
                 {/* New Address Form */}
                 {showNewAddressForm && (
-                  <form onSubmit={handleSaveAddress} className="new-address-form" id="new-address-form">
+                  <form onSubmit={handleSaveAddress} className="new-address-form" id="new-address-form" noValidate>
                     {addressError && (
                       <div className="auth-alert auth-alert-error" role="alert">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="8" x2="12" y2="12"></line>
+                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
                         <span>{addressError}</span>
                       </div>
                     )}
 
                     <div className="form-row">
+                      {/* Recipient Full Name */}
                       <div className="form-group flex-1">
                         <label className="form-label" htmlFor="recipient_name">
                           Recipient Full Name *
@@ -280,14 +365,29 @@ export default function Checkout() {
                           name="recipient_name"
                           value={newAddress.recipient_name}
                           onChange={handleAddressInputChange}
-                          className="form-input"
+                          onBlur={handleBlur}
+                          className={`form-input ${touched.recipient_name && fieldErrors.recipient_name ? 'input-error' : ''}`}
                           placeholder="e.g. Rahul Sharma"
                           required
+                          aria-invalid={touched.recipient_name && Boolean(fieldErrors.recipient_name)}
+                          aria-describedby={fieldErrors.recipient_name ? 'recipient_name-error' : undefined}
                         />
+                        {touched.recipient_name && fieldErrors.recipient_name && (
+                          <span className="field-error-msg" id="recipient_name-error" role="alert">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            {fieldErrors.recipient_name}
+                          </span>
+                        )}
                       </div>
+
+                      {/* Contact Phone Number */}
                       <div className="form-group flex-1">
                         <label className="form-label" htmlFor="phone">
-                          Contact Phone Number
+                          Contact Phone Number *
                         </label>
                         <input
                           type="tel"
@@ -295,12 +395,30 @@ export default function Checkout() {
                           name="phone"
                           value={newAddress.phone}
                           onChange={handleAddressInputChange}
-                          className="form-input"
-                          placeholder="e.g. +91 98765 43210"
+                          onBlur={handleBlur}
+                          className={`form-input ${touched.phone && fieldErrors.phone ? 'input-error' : ''}`}
+                          placeholder="e.g. 9876543210 or +91 98765 43210"
+                          required
+                          aria-invalid={touched.phone && Boolean(fieldErrors.phone)}
+                          aria-describedby={fieldErrors.phone ? 'phone-error' : 'phone-hint'}
                         />
+                        <span className="form-field-hint" id="phone-hint">
+                          10-digit mobile number for courier dispatch & OTP updates.
+                        </span>
+                        {touched.phone && fieldErrors.phone && (
+                          <span className="field-error-msg" id="phone-error" role="alert">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            {fieldErrors.phone}
+                          </span>
+                        )}
                       </div>
                     </div>
 
+                    {/* Street Address Line 1 */}
                     <div className="form-group">
                       <label className="form-label" htmlFor="line1">
                         Street Address / Flat / Building *
@@ -311,12 +429,26 @@ export default function Checkout() {
                         name="line1"
                         value={newAddress.line1}
                         onChange={handleAddressInputChange}
-                        className="form-input"
-                        placeholder="e.g. 42 Sneaker Street, Flat 4B"
+                        onBlur={handleBlur}
+                        className={`form-input ${touched.line1 && fieldErrors.line1 ? 'input-error' : ''}`}
+                        placeholder="e.g. Flat 402, Sneaker Residency, Linking Road"
                         required
+                        aria-invalid={touched.line1 && Boolean(fieldErrors.line1)}
+                        aria-describedby={fieldErrors.line1 ? 'line1-error' : undefined}
                       />
+                      {touched.line1 && fieldErrors.line1 && (
+                        <span className="field-error-msg" id="line1-error" role="alert">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                          </svg>
+                          {fieldErrors.line1}
+                        </span>
+                      )}
                     </div>
 
+                    {/* Area / Landmark (Line 2) */}
                     <div className="form-group">
                       <label className="form-label" htmlFor="line2">
                         Area / Landmark (Optional)
@@ -328,11 +460,12 @@ export default function Checkout() {
                         value={newAddress.line2}
                         onChange={handleAddressInputChange}
                         className="form-input"
-                        placeholder="e.g. Near Central Park, Bandra West"
+                        placeholder="e.g. Near National College, Bandra West"
                       />
                     </div>
 
                     <div className="form-row">
+                      {/* City */}
                       <div className="form-group flex-1">
                         <label className="form-label" htmlFor="city">
                           City *
@@ -343,12 +476,26 @@ export default function Checkout() {
                           name="city"
                           value={newAddress.city}
                           onChange={handleAddressInputChange}
-                          className="form-input"
+                          onBlur={handleBlur}
+                          className={`form-input ${touched.city && fieldErrors.city ? 'input-error' : ''}`}
                           placeholder="e.g. Mumbai"
                           required
+                          aria-invalid={touched.city && Boolean(fieldErrors.city)}
+                          aria-describedby={fieldErrors.city ? 'city-error' : undefined}
                         />
+                        {touched.city && fieldErrors.city && (
+                          <span className="field-error-msg" id="city-error" role="alert">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            {fieldErrors.city}
+                          </span>
+                        )}
                       </div>
 
+                      {/* State */}
                       <div className="form-group flex-1">
                         <label className="form-label" htmlFor="state">
                           State *
@@ -359,12 +506,26 @@ export default function Checkout() {
                           name="state"
                           value={newAddress.state}
                           onChange={handleAddressInputChange}
-                          className="form-input"
+                          onBlur={handleBlur}
+                          className={`form-input ${touched.state && fieldErrors.state ? 'input-error' : ''}`}
                           placeholder="e.g. Maharashtra"
                           required
+                          aria-invalid={touched.state && Boolean(fieldErrors.state)}
+                          aria-describedby={fieldErrors.state ? 'state-error' : undefined}
                         />
+                        {touched.state && fieldErrors.state && (
+                          <span className="field-error-msg" id="state-error" role="alert">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            {fieldErrors.state}
+                          </span>
+                        )}
                       </div>
 
+                      {/* PIN / Postal Code */}
                       <div className="form-group flex-1">
                         <label className="form-label" htmlFor="postal_code">
                           PIN / Postal Code *
@@ -375,10 +536,24 @@ export default function Checkout() {
                           name="postal_code"
                           value={newAddress.postal_code}
                           onChange={handleAddressInputChange}
-                          className="form-input"
+                          onBlur={handleBlur}
+                          maxLength={10}
+                          className={`form-input ${touched.postal_code && fieldErrors.postal_code ? 'input-error' : ''}`}
                           placeholder="e.g. 400050"
                           required
+                          aria-invalid={touched.postal_code && Boolean(fieldErrors.postal_code)}
+                          aria-describedby={fieldErrors.postal_code ? 'postal_code-error' : undefined}
                         />
+                        {touched.postal_code && fieldErrors.postal_code && (
+                          <span className="field-error-msg" id="postal_code-error" role="alert">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10"></circle>
+                              <line x1="12" y1="8" x2="12" y2="12"></line>
+                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            {fieldErrors.postal_code}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -395,7 +570,11 @@ export default function Checkout() {
                         <button
                           type="button"
                           className="btn-secondary"
-                          onClick={() => setShowNewAddressForm(false)}
+                          onClick={() => {
+                            setShowNewAddressForm(false);
+                            setFieldErrors({});
+                            setTouched({});
+                          }}
                         >
                           Cancel
                         </button>

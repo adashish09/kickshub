@@ -5,6 +5,7 @@ import {
   adminUpdateCategory,
   adminDeleteCategory,
 } from '../../services/api';
+import { validateName } from '../../utils/validation';
 
 export default function AdminCategories() {
   const [categories, setCategories] = useState([]);
@@ -17,6 +18,11 @@ export default function AdminCategories() {
   const [newSlug, setNewSlug] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [creating, setCreating] = useState(false);
+  const [nameError, setNameError] = useState(null);
+  const [nameTouched, setNameTouched] = useState(false);
+  const [slugError, setSlugError] = useState(null);
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [createError, setCreateError] = useState(null);
 
   // Editing Category
   const [editingId, setEditingId] = useState(null);
@@ -45,9 +51,29 @@ export default function AdminCategories() {
     loadCategories();
   }, []);
 
+  const validateSlug = (slugVal) => {
+    if (!slugVal || !slugVal.trim()) return null;
+    if (!/^[a-z0-9-]+$/.test(slugVal.trim())) {
+      return 'Slug can only contain lowercase letters, numbers, and hyphens.';
+    }
+    return null;
+  };
+
   const handleCreateCategory = async (e) => {
     e.preventDefault();
-    if (!newName.trim()) return;
+    setCreateError(null);
+    setNameTouched(true);
+    setSlugTouched(true);
+
+    const nErr = validateName(newName, 'Category name');
+    setNameError(nErr);
+
+    const sErr = validateSlug(newSlug);
+    setSlugError(sErr);
+
+    if (nErr || sErr) {
+      return;
+    }
 
     setCreating(true);
     try {
@@ -60,9 +86,13 @@ export default function AdminCategories() {
       setNewName('');
       setNewSlug('');
       setNewDesc('');
+      setNameTouched(false);
+      setSlugTouched(false);
+      setNameError(null);
+      setSlugError(null);
       loadCategories();
     } catch (err) {
-      alert(err.response?.data?.error?.message || 'Failed to create category.');
+      setCreateError(err.response?.data?.error?.message || 'Failed to create category.');
     } finally {
       setCreating(false);
     }
@@ -265,7 +295,18 @@ export default function AdminCategories() {
               Create a new category for sneaker grouping. Slugs must be unique.
             </p>
 
-            <form onSubmit={handleCreateCategory} className="admin-entity-form">
+            <form onSubmit={handleCreateCategory} className="admin-entity-form" noValidate>
+              {createError && (
+                <div className="auth-alert auth-alert-error" role="alert" style={{ marginBottom: '1rem' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  <span>{createError}</span>
+                </div>
+              )}
+
               <div className="form-group">
                 <label htmlFor="cat-name" className="form-label">
                   Category Name *
@@ -275,10 +316,31 @@ export default function AdminCategories() {
                   type="text"
                   placeholder="e.g. Skateboarding"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (nameTouched) {
+                      setNameError(validateName(e.target.value, 'Category name'));
+                    }
+                  }}
+                  onBlur={() => {
+                    setNameTouched(true);
+                    setNameError(validateName(newName, 'Category name'));
+                  }}
+                  className={`form-input ${nameTouched && nameError ? 'input-error' : ''}`}
                   required
+                  aria-invalid={nameTouched && Boolean(nameError)}
+                  aria-describedby={nameError ? 'cat-name-error' : undefined}
                 />
+                {nameTouched && nameError && (
+                  <span className="field-error-msg" id="cat-name-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {nameError}
+                  </span>
+                )}
               </div>
 
               <div className="form-group">
@@ -290,9 +352,30 @@ export default function AdminCategories() {
                   type="text"
                   placeholder="e.g. skateboarding"
                   value={newSlug}
-                  onChange={(e) => setNewSlug(e.target.value)}
-                  className="form-input"
+                  onChange={(e) => {
+                    setNewSlug(e.target.value);
+                    if (slugTouched) {
+                      setSlugError(validateSlug(e.target.value));
+                    }
+                  }}
+                  onBlur={() => {
+                    setSlugTouched(true);
+                    setSlugError(validateSlug(newSlug));
+                  }}
+                  className={`form-input ${slugTouched && slugError ? 'input-error' : ''}`}
+                  aria-invalid={slugTouched && Boolean(slugError)}
+                  aria-describedby={slugError ? 'cat-slug-error' : undefined}
                 />
+                {slugTouched && slugError && (
+                  <span className="field-error-msg" id="cat-slug-error" role="alert">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    {slugError}
+                  </span>
+                )}
               </div>
 
               <div className="form-group">

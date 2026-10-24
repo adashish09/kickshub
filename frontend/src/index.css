@@ -2192,15 +2192,43 @@ button {
   box-shadow: 0 0 0 2px rgba(36, 36, 36, 0.08);
 }
 
-.form-input.input-error {
-  border-color: #dc2626;
-  background-color: #fef2f2;
+.form-input.input-error,
+.form-select.input-error,
+.form-textarea.input-error,
+.price-input.input-error {
+  border-color: #dc2626 !important;
+  background-color: #fff9f9 !important;
+}
+
+.form-input.input-error:focus,
+.form-select.input-error:focus,
+.form-textarea.input-error:focus,
+.price-input.input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
 }
 
 .field-error-msg {
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.775rem;
   color: #dc2626;
   font-weight: 500;
+  margin-top: 0.35rem;
+  line-height: 1.35;
+}
+
+.field-error-msg svg {
+  flex-shrink: 0;
+}
+
+.form-field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.35;
 }
 
 /* Password Checklist */
