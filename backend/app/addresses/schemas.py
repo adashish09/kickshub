@@ -29,55 +29,43 @@ def validate_phone_number(phone, country="India"):
     """
     Validate contact phone number:
     - Required
-    - Must be a valid string of digits with optional +, -, (), spaces
-    - Between 10 and 15 digits
-    - For Indian numbers: 10-digit mobile must start with 6, 7, 8, or 9
+    - Numbers only
+    - Max length 10 digits
+    - Indian mobile validation: exactly 10 digits starting with 6, 7, 8, or 9
     """
     if not phone or not isinstance(phone, str) or not phone.strip():
         raise AddressValidationError("INVALID_PHONE", "Contact phone number is required.")
-    phone = phone.strip()
+    phone_str = phone.strip()
 
-    # Allowed characters: digits, spaces, hyphens, plus, parentheses
-    if not re.match(r"^[\+]?[0-9\s\-\(\)]+$", phone):
+    # Reject if contains letters
+    if re.search(r"[a-zA-Z]", phone_str):
         raise AddressValidationError(
             "INVALID_PHONE",
-            "Phone number contains invalid characters. Please use numbers and optional + or hyphens."
+            "Phone number must contain numbers only."
         )
 
-    digits = re.sub(r"\D", "", phone)
-    if len(digits) < 10:
+    # Extract digits, allowing optional +91 or 0 prefix from legacy/external callers
+    digits = re.sub(r"\D", "", phone_str)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+
+    # Enforce strictly 10 digits
+    if len(digits) != 10:
         raise AddressValidationError(
             "INVALID_PHONE",
-            f"Phone number is too short ({len(digits)} digits). Must have at least 10 digits."
+            f"Phone number must be exactly 10 digits (received {len(digits)} digits)."
         )
-    if len(digits) > 15:
+
+    # Enforce Indian mobile starting digit 6, 7, 8, or 9
+    if digits[0] not in "6789":
         raise AddressValidationError(
             "INVALID_PHONE",
-            f"Phone number is too long ({len(digits)} digits). Cannot exceed 15 digits."
+            "Indian mobile number must be 10 digits starting with 6, 7, 8, or 9."
         )
 
-    # For Indian mobile numbers (10 digits, or 11 with 0, or 12 with 91)
-    if country.lower() == "india":
-        if len(digits) == 10:
-            if digits[0] not in "6789":
-                raise AddressValidationError(
-                    "INVALID_PHONE",
-                    "A 10-digit Indian mobile number must start with 6, 7, 8, or 9."
-                )
-        elif len(digits) == 11 and digits.startswith("0"):
-            if digits[1] not in "6789":
-                raise AddressValidationError(
-                    "INVALID_PHONE",
-                    "Mobile number with leading 0 must be followed by 6, 7, 8, or 9."
-                )
-        elif len(digits) == 12 and digits.startswith("91"):
-            if digits[2] not in "6789":
-                raise AddressValidationError(
-                    "INVALID_PHONE",
-                    "Indian mobile number with +91 must have 10 digits starting with 6, 7, 8, or 9."
-                )
-
-    return phone
+    return digits
 
 
 def validate_line1(line1):
@@ -133,29 +121,34 @@ def validate_state(state):
 
 
 def validate_postal_code(postal_code, country="India"):
-    """Validate postal code (PIN code in India)."""
+    """
+    Validate postal code / PIN code:
+    - Required
+    - Numbers only
+    - Min and Max length is exactly 6 digits
+    - Valid Indian PIN code (cannot start with 0)
+    """
     if not postal_code or not isinstance(postal_code, str) or not postal_code.strip():
-        raise AddressValidationError("INVALID_POSTAL_CODE", "Postal code / PIN code is required.")
-    postal_code = postal_code.strip()
+        raise AddressValidationError("INVALID_POSTAL_CODE", "PIN code is required.")
+    pin_str = postal_code.strip()
 
-    if country.lower() == "india":
-        if not re.match(r"^[1-9][0-9]{5}$", postal_code):
-            raise AddressValidationError(
-                "INVALID_POSTAL_CODE",
-                "Please enter a valid 6-digit Indian PIN code (e.g. 400001)."
-            )
-    else:
-        if not re.match(r"^[A-Za-z0-9\s\-]{3,10}$", postal_code):
-            raise AddressValidationError(
-                "INVALID_POSTAL_CODE",
-                "Please enter a valid postal code (3-10 alphanumeric characters)."
-            )
+    if not re.match(r"^\d{6}$", pin_str):
+        raise AddressValidationError(
+            "INVALID_POSTAL_CODE",
+            "PIN code must be exactly 6 digits and contain numbers only."
+        )
 
-    return postal_code
+    if pin_str.startswith("0"):
+        raise AddressValidationError(
+            "INVALID_POSTAL_CODE",
+            "Indian PIN code cannot start with 0."
+        )
+
+    return pin_str
 
 
 def validate_create_address_payload(data):
-    """Validate payload for creating a user address."""
+    """Validate payload for creating or updating a user address."""
     if not isinstance(data, dict):
         raise AddressValidationError("INVALID_JSON", "Request body must be a JSON object.")
 

@@ -54,3 +54,45 @@ def create_address(user_id, address_data):
         raise
 
     return serialize_address(address)
+
+
+def update_address(user_id, address_id, address_data):
+    """Update an existing delivery address for a user."""
+    address = Address.query.filter_by(id=address_id, user_id=user_id).first()
+    if not address:
+        return None
+
+    address.recipient_name = address_data["recipient_name"]
+    address.phone = address_data.get("phone", "")
+    address.line1 = address_data["line1"]
+    address.line2 = address_data.get("line2", "")
+    address.city = address_data["city"]
+    address.state = address_data["state"]
+    address.postal_code = address_data["postal_code"]
+    address.country = address_data.get("country", "India")
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Failed to update address %s for user %s: %s", address_id, user_id, exc)
+        raise
+
+    return serialize_address(address)
+
+
+def delete_address(user_id, address_id):
+    """Delete a delivery address for a user."""
+    address = Address.query.filter_by(id=address_id, user_id=user_id).first()
+    if not address:
+        return False
+
+    db.session.delete(address)
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Failed to delete address %s for user %s: %s", address_id, user_id, exc)
+        raise
+
+    return True

@@ -12,6 +12,7 @@ import {
   validatePhone,
   formatPhoneInput,
   validatePostalCode,
+  formatPostalCodeInput,
   validateName,
   validateAddressLine,
   validateCityOrState,
@@ -123,6 +124,8 @@ export default function Checkout() {
     let formattedVal = value;
     if (name === 'phone') {
       formattedVal = formatPhoneInput(value);
+    } else if (name === 'postal_code') {
+      formattedVal = formatPostalCodeInput(value);
     }
     setNewAddress((prev) => ({ ...prev, [name]: formattedVal }));
 
@@ -391,19 +394,22 @@ export default function Checkout() {
                         </label>
                         <input
                           type="tel"
+                          inputMode="numeric"
+                          pattern="[6-9][0-9]{9}"
+                          maxLength={10}
                           id="phone"
                           name="phone"
                           value={newAddress.phone}
                           onChange={handleAddressInputChange}
                           onBlur={handleBlur}
                           className={`form-input ${touched.phone && fieldErrors.phone ? 'input-error' : ''}`}
-                          placeholder="e.g. 9876543210 or +91 98765 43210"
+                          placeholder="e.g. 9876543210"
                           required
                           aria-invalid={touched.phone && Boolean(fieldErrors.phone)}
                           aria-describedby={fieldErrors.phone ? 'phone-error' : 'phone-hint'}
                         />
                         <span className="form-field-hint" id="phone-hint">
-                          10-digit mobile number for courier dispatch & OTP updates.
+                          10-digit Indian mobile number (numbers only, starts with 6-9).
                         </span>
                         {touched.phone && fieldErrors.phone && (
                           <span className="field-error-msg" id="phone-error" role="alert">
@@ -532,18 +538,24 @@ export default function Checkout() {
                         </label>
                         <input
                           type="text"
+                          inputMode="numeric"
+                          pattern="[1-9][0-9]{5}"
+                          maxLength={6}
+                          minLength={6}
                           id="postal_code"
                           name="postal_code"
                           value={newAddress.postal_code}
                           onChange={handleAddressInputChange}
                           onBlur={handleBlur}
-                          maxLength={10}
                           className={`form-input ${touched.postal_code && fieldErrors.postal_code ? 'input-error' : ''}`}
                           placeholder="e.g. 400050"
                           required
                           aria-invalid={touched.postal_code && Boolean(fieldErrors.postal_code)}
-                          aria-describedby={fieldErrors.postal_code ? 'postal_code-error' : undefined}
+                          aria-describedby={fieldErrors.postal_code ? 'postal_code-error' : 'postal_code-hint'}
                         />
+                        <span className="form-field-hint" id="postal_code-hint">
+                          6-digit Indian PIN code (numbers only).
+                        </span>
                         {touched.postal_code && fieldErrors.postal_code && (
                           <span className="field-error-msg" id="postal_code-error" role="alert">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

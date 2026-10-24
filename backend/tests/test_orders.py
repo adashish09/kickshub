@@ -598,3 +598,90 @@ def test_address_validation_rules(app, client):
     assert res.status_code == 400
     assert res.get_json()["error"]["code"] == "INVALID_LINE1"
 
+
+def test_address_update_and_delete(app, client):
+    """Test updating and deleting addresses, including cross-user authorization security."""
+    user1_token = register_and_login(client, "user1_addr@kickshub.local")
+    user2_token = register_and_login(client, "user2_addr@kickshub.local")
+
+    # User 1 creates an address
+    res = client.post(
+        "/api/v1/addresses",
+        json={
+            "recipient_name": "Initial Name",
+            "phone": "9876543210",
+            "line1": "Flat 101, Sneaker Residency",
+            "line2": "MG Road",
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "postal_code": "400001",
+            "country": "India",
+        },
+        headers={"Authorization": f"Bearer {user1_token}"},
+    )
+    assert res.status_code == 201
+    addr_id = res.get_json()["address"]["id"]
+
+    # User 2 cannot update User 1's address (404)
+    res_unauth_update = client.put(
+        f"/api/v1/addresses/{addr_id}",
+        json={
+            "recipient_name": "Hacker Name",
+            "phone": "9876543211",
+            "line1": "Malicious Street 1",
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "postal_code": "400001",
+        },
+        headers={"Authorization": f"Bearer {user2_token}"},
+    )
+    assert res_unauth_update.status_code == 404
+
+    # User 1 successfully updates their address
+    res_update = client.put(
+        f"/api/v1/addresses/{addr_id}",
+        json={
+            "recipient_name": "Updated Name",
+            "phone": "9123456789",
+            "line1": "New Flat 202, Marine Drive",
+            "line2": "Opposite Sea",
+            "city": "Mumbai",
+            "state": "Maharashtra",
+            "postal_code": "400020",
+        },
+        headers={"Authorization": f"Bearer {user1_token}"},
+    )
+    assert res_update.status_code == 200
+    updated_addr = res_update.get_json()["address"]
+    assert updated_addr["recipient_name"] == "Updated Name"
+    assert updated_addr["phone"] == "9123456789"
+    assert updated_addr["line1"] == "New Flat 202, Marine Drive"
+    assert updated_addr["postal_code"] == "400020"
+
+    # User 2 cannot delete User 1's address (404)
+    res_unauth_delete = client.delete(
+        f"/api/v1/addresses/{addr_id}",
+        headers={"Authorization": f"Bearer {user2_token}"},
+    )
+    assert res_unauth_delete.status_code == 404
+
+    # User 1 deletes their address
+    res_delete = client.delete(
+        f"/api/v1/addresses/{addr_id}",
+        headers={"Authorization": f"Bearer {user1_token}"},
+    )
+    assert res_delete.status_code == 200
+
+    # Address is gone for User 1
+    res_list = client.get("/api/v1/addresses", headers={"Authorization": f"Bearer {user1_token}"})
+    assert res_list.status_code == 200
+    assert len(res_list.get_json()["addresses"]) == 0
+
+    # Second delete returns 404
+    res_delete_again = client.delete(
+        f"/api/v1/addresses/{addr_id}",
+        headers={"Authorization": f"Bearer {user1_token}"},
+    )
+    assert res_delete_again.status_code == 404
+
+

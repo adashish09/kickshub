@@ -424,6 +424,25 @@ export async function apiCreateAddress(addressData) {
   return response.data;
 }
 
+/**
+ * Update an existing delivery address for the authenticated user.
+ * @param {number} addressId
+ * @param {object} addressData
+ */
+export async function apiUpdateAddress(addressId, addressData) {
+  const response = await apiClient.put(`/addresses/${addressId}`, addressData);
+  return response.data;
+}
+
+/**
+ * Delete a delivery address for the authenticated user.
+ * @param {number} addressId
+ */
+export async function apiDeleteAddress(addressId) {
+  const response = await apiClient.delete(`/addresses/${addressId}`);
+  return response.data;
+}
+
 // ---------------------------------------------------------------------------
 // Orders API Endpoints
 // ---------------------------------------------------------------------------

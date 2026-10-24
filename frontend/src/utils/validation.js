@@ -8,45 +8,29 @@ const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-
 
 /**
  * Validate phone number format
- * Supports standard Indian mobile numbers (10 digits starting with 6-9, with optional +91 or 0)
- * and international E.164 formats (10-15 digits).
+ * Strictly enforces:
+ * - Numbers only
+ * - Exactly 10 digits (max length 10)
+ * - Indian mobile validation: starts with 6, 7, 8, or 9
  */
 export function validatePhone(phone, country = 'India') {
   if (!phone || typeof phone !== 'string' || !phone.trim()) {
-    return 'Contact phone number is required for delivery.';
+    return 'Contact phone number is required.';
   }
 
   const trimmed = phone.trim();
 
-  // Allow only digits, +, -, (, ), and whitespace
-  if (!/^[\+]?[\d\s\-()]+$/.test(trimmed)) {
-    return 'Phone number contains invalid characters. Use digits and optional + or hyphens.';
+  // Allow digits only (reject letters, special characters, symbols)
+  if (!/^\d+$/.test(trimmed)) {
+    return 'Phone number must contain numbers only.';
   }
 
-  const digits = trimmed.replace(/\D/g, '');
-
-  if (digits.length < 10) {
-    return `Phone number is too short (${digits.length} digits). Minimum 10 digits required.`;
+  if (trimmed.length !== 10) {
+    return `Phone number must be exactly 10 digits (entered ${trimmed.length}).`;
   }
 
-  if (digits.length > 15) {
-    return `Phone number is too long (${digits.length} digits). Maximum 15 digits allowed.`;
-  }
-
-  if (country.toLowerCase() === 'india') {
-    if (digits.length === 10) {
-      if (!/^[6-9]/.test(digits)) {
-        return '10-digit mobile number must start with 6, 7, 8, or 9.';
-      }
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      if (!/^0[6-9]/.test(digits)) {
-        return 'Mobile number starting with 0 must be followed by 6, 7, 8, or 9.';
-      }
-    } else if (digits.length === 12 && digits.startsWith('91')) {
-      if (!/^91[6-9]/.test(digits)) {
-        return 'Indian mobile number (+91) must have 10 digits starting with 6, 7, 8, or 9.';
-      }
-    }
+  if (!/^[6-9]/.test(trimmed)) {
+    return 'Indian mobile number must start with 6, 7, 8, or 9.';
   }
 
   return null;
@@ -54,38 +38,49 @@ export function validatePhone(phone, country = 'India') {
 
 /**
  * Format and sanitize phone input as user types
+ * Numbers only, maximum 10 digits
  */
 export function formatPhoneInput(value) {
-  // Allow leading +, digits, spaces, and hyphens
-  let cleaned = value.replace(/[^\d\+\s\-]/g, '');
-  // Only allow + at the very beginning
-  if (cleaned.indexOf('+') > 0) {
-    cleaned = cleaned.charAt(0) === '+' ? '+' + cleaned.replace(/\+/g, '') : cleaned.replace(/\+/g, '');
-  }
-  return cleaned;
+  if (!value) return '';
+  return String(value).replace(/\D/g, '').slice(0, 10);
 }
 
 /**
  * Validate postal / PIN code
+ * Strictly enforces:
+ * - Numbers only
+ * - Exactly 6 digits (min and max length 6)
+ * - Valid Indian PIN code (cannot start with 0)
  */
 export function validatePostalCode(code, country = 'India') {
-  if (!code || typeof code !== 'string' || !code.trim()) {
-    return 'PIN / Postal code is required.';
+  if (!code || typeof code !== 'string' || !String(code).trim()) {
+    return 'PIN code is required.';
   }
 
-  const trimmed = code.trim();
+  const trimmed = String(code).trim();
 
-  if (country.toLowerCase() === 'india') {
-    if (!/^[1-9]\d{5}$/.test(trimmed)) {
-      return 'Please enter a valid 6-digit Indian PIN code (e.g. 400001).';
-    }
-  } else {
-    if (!/^[A-Za-z0-9\s\-]{3,10}$/.test(trimmed)) {
-      return 'Please enter a valid postal code (3-10 characters).';
-    }
+  if (!/^\d+$/.test(trimmed)) {
+    return 'PIN code must contain numbers only.';
+  }
+
+  if (trimmed.length !== 6) {
+    return `PIN code must be exactly 6 digits (entered ${trimmed.length}).`;
+  }
+
+  if (trimmed.startsWith('0')) {
+    return 'Indian PIN code cannot start with 0.';
   }
 
   return null;
+}
+
+/**
+ * Format and sanitize PIN code input as user types
+ * Numbers only, maximum 6 digits
+ */
+export function formatPostalCodeInput(value) {
+  if (!value) return '';
+  return String(value).replace(/\D/g, '').slice(0, 6);
 }
 
 /**
